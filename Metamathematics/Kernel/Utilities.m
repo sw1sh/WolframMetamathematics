@@ -3,6 +3,7 @@ Package["Wolfram`Metamathematics`"]
 PackageImport["GeneralUtilities`"]
 
 
+PackageExport["wrap"]
 PackageExport["rests"]
 PackageExport["mosts"]
 PackageExport["extract"]
@@ -16,7 +17,11 @@ PackageExport["formalizePatterns"]
 PackageExport["makeReplaceRule"]
 PackageExport["makePatternRule"]
 PackageExport["symbolifyPatterns"]
+PackageExport["patternifySymbols"]
 
+
+
+wrap[expr_, head_ : List] := Replace[expr, x : Except[_head] :> head[x]]
 
 
 rests[l_List] := NestList[Rest, l, Length @ l]
@@ -33,6 +38,8 @@ extract[expr_, pos : {_Integer ...}] :=  If[pos === {}, expr, Enclose[
 
 replacePart[expr_, pos : {_Integer ...} -> part_] := If[pos === {}, part, ReplacePart[expr, pos -> part]]
 
+replacePart[expr_, rules_List] := ReplacePart[expr, MapAt[Replace[{} -> {{}}], {1}] /@ rules]
+
 
 mapAt[f_, expr_, pos_] := If[pos === {}, f @ expr, MapAt[f, expr, pos]]
 
@@ -46,10 +53,10 @@ replaceAllUnderHold[expr_, rule_ ? RuleQ, opts : OptionsPattern[]] := replaceAll
 replaceAllUnderHold[expr_, rules : {_ ? RuleQ...}, opts : OptionsPattern[]] := With[{
 	pos = Position[Unevaluated[expr], Alternatives @@ rules[[All, 1]], opts]
 },
-	ReplacePart[Unevaluated[expr], Thread[pos -> Replace[rules] /@ Extract[Unevaluated[expr], pos]]]
+	replacePart[Unevaluated[expr], Thread[pos -> Replace[rules] /@ Extract[Unevaluated[expr], pos]]]
 ]
 
-replaceAllUnderHold[rules_, opts : OptionsPattern[]] := Function[expr, replaceAllUnderHold[expr, rules, opts]]
+replaceAllUnderHold[rules_, opts : OptionsPattern[]][expr_]:= replaceAllUnderHold[expr, rules, opts]
 
 
 MapAtInplace[f_, expr_, pos_] := ReplacePart[expr, Extract[expr, pos, f], pos]
@@ -68,7 +75,15 @@ uniquifyPatterns[expr1_, expr2_] := ReplaceAll[expr1,
 
 canonicalizePatterns[expr_] := ReplaceAll[expr,
 	MapIndexed[
-		With[{canonical = Pattern @@ {Symbol @ Extract[Alphabet[], #2], Last @ #1}}, Verbatim[#1] :> canonical] &,
+		With[{canonical = Pattern @@ {
+				Symbol @ Extract[
+					Join[CharacterRange["\[FormalA]", "\[FormalZ]"], CharacterRange["\[FormalCapitalA]", "\[FormalCapitalZ]"]],
+					#2
+				],
+				Last @ #1
+			}},
+			Verbatim[#1] :> canonical
+		] &,
 		DeleteDuplicates @ Cases[expr, _Pattern, All, Heads -> True]
 	]
 ]
@@ -97,4 +112,8 @@ makePatternRule[lhs_, rhs_] := With[{newRHS = ReplaceAll[Hold[rhs], (First[#] ->
 
 
 symbolifyPatterns[expr_] := replaceAllUnderHold[expr, p_Pattern :> First[p]]
+
+
+patternifySymbols[expr_, prefix_ : {"x", "y", "z"}] :=
+	expr /. x_Symbol /; StringMatchQ[SymbolName[x], Alternatives @@ prefix ~~ DigitCharacter...] :> Pattern @@ {x, _}
 

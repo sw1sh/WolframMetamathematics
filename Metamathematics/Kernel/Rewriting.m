@@ -2,7 +2,9 @@ Package["Wolfram`Metamathematics`"]
 
 
 PackageExport["unify"]
+PackageExport["lexicographicPatternSort"]
 PackageExport["unifier"]
+PackageExport["disagreementSet"]
 
 
 
@@ -23,22 +25,30 @@ Module[{
 ]
 
 
-unifier[p_Pattern, expr_] := <|p -> expr|>
+lexicographicPatternSort[expr_] := ReverseSortBy[SortBy[expr, symbolifyPatterns], MatchQ[_Pattern]]
 
-unifier[expr_, p_Pattern] := <|p -> expr|>
 
-unifier[x : h1_[rest1___], y : h2_[rest2___]] /; Length[{rest1}] == Length[{rest2}] := Enclose[With[{
-	u = Association @ ConfirmBy[
-		DeleteDuplicates @ Prepend[Confirm @ unifier[h1, h2]] @ MapThread[Confirm @ unifier @@ Sort[{##}] &, {{rest1}, {rest2}}],
-		AllTrue[#, AssociationQ] && DuplicateFreeQ @ Catenate[Keys /@ #] &
-	]
-},
-	With[{substituion = Normal @ KeyMap[Verbatim, u]}, # /. substituion & /@ u]
-],
-	Failure["NonUnifiable", <|"MessageTemplate" -> "Can't unify `` and ``", "MessageParameters" -> {x, y}|>] &
+disagreementSet[term_ ...] := {}
+
+disagreementSet[terms : Except[Pattern, term_][___]...] :=
+	Enclose[lexicographicPatternSort[Union @@ MapThread[disagreementSet, ConfirmBy[List @@@ {terms}, Map[Length] /* Apply[Equal]]]]]
+
+disagreementSet[terms___] := {lexicographicPatternSort @ Union @ {terms}}
+
+
+iunifier[terms_List, substitution_Association] := Module[{newTerms, ds, s, t},
+	newTerms = terms /. substitution;
+	ds = disagreementSet @@ newTerms;
+	If[ ds === {}, Return[substitution]];
+	If[ FailureQ[ds],
+		Return[Failure["NonUnifiable", <|"MessageTemplate" -> "Can't unify ``", "MessageParameters" -> {terms}|>]]
+	];
+	{s, t} = First[ds];
+	If[! MatchQ[s, _Pattern] || ! FreeQ[t, Verbatim[s]],
+		Return[Failure["NonUnifiable", <|"MessageTemplate" -> "Can't unify `` and ``", "MessageParameters" -> {s, t}|>]]
+	];
+	iunifier[terms, <|ReplaceAll[<|s -> t|>] /@ substitution, s -> t|>]
 ]
 
-unifier[expr_, expr_] := <||>
-
-unifier[x_, y_] := Failure["NonUnifiable", <|"MessageTemplate" -> "Can't unify `` and ``", "MessageParameters" -> {x, y}|>]
+unifier[terms___] := iunifier[{terms}, <||>]
 

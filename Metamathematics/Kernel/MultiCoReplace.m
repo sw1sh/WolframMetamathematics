@@ -3,7 +3,7 @@ Package["Wolfram`Metamathematics`"]
 PackageImport["GeneralUtilities`"]
 
 
-PackageExport["MultiSubsetUnify"]
+PackageExport["MultiCoUnify"]
 PackageExport["MultiCoReplace"]
 PackageExport["unifyAt"]
 PackageExport["CoMatchAt"]
@@ -11,26 +11,26 @@ PackageExport["CoReplaceAt"]
 
 
 
-Options[iMultiSubsetUnify] = Options[unify];
+Options[iMultiCoUnify] := Options[unify];
 
-iMultiSubsetUnify[posSubExpr_, subset_, head_Symbol, opts : OptionsPattern[]] := Module[{
+iMultiCoUnify[posSubExpr_, subset_, head_Symbol, opts : OptionsPattern[]] := Module[{
 	positions, values,
-	subsets = Replace[subset, {x : Except[_head] :> head[x]}]
+	subsets = wrap[subset, head]
 },
 	positions = Keys[posSubExpr];
 	values = Values[posSubExpr];
 	DeleteCases[_ ? FailureQ] @ Association @ Map[pos |->
 		Extract[positions, pos] ->
 			With[{term = Extract[values, pos]}, unify[head @@ term, subsets, opts](* & /@ orderByPattern[term, head] @ subsets*)],
-		List @@@ Tuples[Position[values, patt_ /; MatchQ[#, patt], {1}, Heads -> False] & /@ subsets]
+		Tuples[Position[values, patt_ /; MatchQ[#, patt], {1}, Heads -> False] & /@ subsets]
 	]
 
 ]
 
 
-Options[MultiSubsetUnify] = Join[Options[SubexpressionPositions], Options[iMultiSubsetUnify]];
+Options[MultiCoUnify] := Join[Options[SubexpressionPositions], Options[iMultiCoUnify]];
 
-MultiSubsetUnify[expr_, subset_, head_Symbol : List, opts : OptionsPattern[]] := With[{
+MultiCoUnify[expr_, subset_, head_Symbol : List, opts : OptionsPattern[]] := With[{
 	posSubExpr = SubexpressionPositions[expr,
 		FilterRules[{
 			opts,
@@ -39,25 +39,21 @@ MultiSubsetUnify[expr_, subset_, head_Symbol : List, opts : OptionsPattern[]] :=
 		}, Options[SubexpressionPositions]]
 	]},
 
-	iMultiSubsetUnify[posSubExpr, subset, head, FilterRules[{opts}, Options[iMultiSubsetUnify]]]
+	iMultiCoUnify[posSubExpr, subset, head, FilterRules[{opts}, Options[iMultiCoUnify]]]
 ]
 
-
-Options[MultiCoReplace] = Join[Options[MultiSubsetUnify]];
-
-iMultiCoReplace // ClearAll
 
 iMultiCoReplace[expr_, rule_ ? RuleQ, multiUnification_Association, head_Symbol] :=
 	DeleteCases[{}] @ Association @ KeyValueMap[{pos, unifications} |-> pos -> DeleteDuplicates @ Catenate @ Map[unification |->
 		With[{
-			newExpr = expr /. Normal @ KeyMap[Verbatim, unification]
+			newExpr = expr /. unification
 		},
 			Map[
-				With[{res = Replace[#, {x : Except[_head] :> head[x]}]},
+				With[{res = wrap[#, head]},
 					ReplacePart[newExpr, List @@ Thread[head @@ Take[Replace[{} -> {{}}] /@ pos, UpTo[Length[res]]] -> Take[res, UpTo[Length[pos]]], head]]
 				] &,
 				ReplaceList[
-					Replace[First[rule], x : Except[_head] :> head[x]],
+					wrap[First[rule], head],
 					ReplacePart[rule, 1 -> head[OrderlessPatternSequence @@ Extract[newExpr, pos]]]
 				]
 			]
@@ -67,8 +63,11 @@ iMultiCoReplace[expr_, rule_ ? RuleQ, multiUnification_Association, head_Symbol]
 	multiUnification
 ]
 
+
+Options[MultiCoReplace] = Join[Options[MultiCoUnify]];
+
 MultiCoReplace[expr_, rule_ ? RuleQ, head_Symbol : List, opts : OptionsPattern[]] :=
-	iMultiCoReplace[expr, rule, MultiSubsetUnify[expr, First[rule], FilterRules[{opts}, Options[MultiSubsetUnify]]], head]
+	iMultiCoReplace[expr, rule, MultiCoUnify[expr, First[rule], FilterRules[{opts}, Options[MultiCoUnify]]], head]
 
 MultiCoReplace[expr_, rules : {_ ? RuleQ ...}, head_Symbol : List, opts : OptionsPattern[]] := With[{
 	posSubExpr = SubexpressionPositions[expr,
@@ -81,24 +80,24 @@ MultiCoReplace[expr_, rules : {_ ? RuleQ ...}, head_Symbol : List, opts : Option
 	Association @ MapIndexed[
 		KeyMap[
 			List /* Prepend[First @ #2],
-			iMultiCoReplace[expr, #1, iMultiSubsetUnify[posSubExpr, First[#1], head, FilterRules[{opts}, Options[iMultiSubsetUnify]]], head]
+			iMultiCoReplace[expr, #1, iMultiCoUnify[posSubExpr, First[#1], head, FilterRules[{opts}, Options[iMultiCoUnify]]], head]
 		] &,
 		rules
 	]
 ]
 
 
-unifyAt[expr_, patt_, pos_] := Enclose @ Normal @ KeyMap[Verbatim] @ Confirm @ unifier[extract[expr, pos], patt]
+CoUnifyAt[expr_, patt_, pos_] := Enclose @ First @ Confirm @ unify[extract[expr, pos], patt]
 
 
 CoMatchAt[expr_, patt_, pos_] := Enclose @ With[{newPatt = Block[{$ModuleNumber = 1}, uniquifyPatterns[patt, expr]]},
-	expr /. Confirm @ unifyAt[expr, newPatt, pos]
+	expr /. Confirm @ CoUnifyAt[expr, newPatt, pos]
 ]
 
 
 CoReplaceAt[expr_, rule_ ? RuleQ, pos_] := Enclose @ With[{newRule = Block[{$ModuleNumber = 1}, uniquifyPatterns[makePatternRule @@ rule, expr]]},
 	With[{
-		substitution = Normal @ KeyMap[Verbatim] @ Confirm @ unifier[extract[expr, pos], First[newRule]]
+		substitution = First @ Confirm @ unify[extract[expr, pos], First[newRule]]
 	},
 		mapAt[Replace[makeReplaceRule @@ newRule], expr /. substitution, pos]
 	]

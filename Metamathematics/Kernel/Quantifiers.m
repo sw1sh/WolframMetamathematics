@@ -3,7 +3,7 @@ Package["Wolfram`Metamathematics`"]
 PackageExport["universalPatterns"]
 PackageExport["skolemPatterns"]
 PackageExport["unquantifyFormula"]
-PackageExport["rulifyFormulat"]
+PackageExport["rulifyFormula"]
 PackageExport["rulifyLiteral"]
 
 

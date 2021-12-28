@@ -6,7 +6,7 @@ PackageExport["MultiReplace"]
 
 
 
-Options[MultiReplace] = Options[SubexpressionPositions];
+Options[MultiReplace] := Options[SubexpressionPositions];
 
 iMultiReplace[expr_, rule_ ? RuleQ, subExprPos_Association, head_Symbol] := Module[{
 	lhs = First[rule],
@@ -39,3 +39,4 @@ MultiReplace[expr_, rule_ ? RuleQ, head_Symbol : List, opts : OptionsPattern[]] 
 MultiReplace[expr_, rules : {(_ ? RuleQ)..}, head_Symbol : List, opts : OptionsPattern[]] := With[{subExprPos = SubexpressionPositions[expr, opts]},
 	Association @ MapIndexed[KeyMap[List /* Prepend[First @ #2], iMultiReplace[expr, #1, subExprPos, head]] &, rules]
 ]
+
