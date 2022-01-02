@@ -73,18 +73,24 @@ uniquifyPatterns[expr1_, expr2_] := ReplaceAll[expr1,
 ]
 
 
-canonicalizePatterns[expr_] := ReplaceAll[expr,
-	MapIndexed[
-		With[{canonical = Pattern @@ {
-				Symbol @ Extract[
-					Join[CharacterRange["\[FormalA]", "\[FormalZ]"], CharacterRange["\[FormalCapitalA]", "\[FormalCapitalZ]"]],
-					#2
-				],
-				Last @ #1
-			}},
-			Verbatim[#1] :> canonical
-		] &,
-		DeleteDuplicates @ Cases[expr, _Pattern, All, Heads -> True]
+canonicalizePatterns[expr_] := Module[{
+	chars = Join[CharacterRange["\[FormalA]", "\[FormalZ]"], CharacterRange["\[FormalCapitalA]", "\[FormalCapitalZ]"]],
+	patts = DeleteDuplicates @ Cases[expr, _Pattern, All, Heads -> True]
+},
+	chars = First @ NestWhile[Apply[{cs, n} |-> {Join[cs,  (# <> ToString[n]) & /@ cs], n + 1}], {chars, 1}, Length[#[[1]]] < Length[patts] &];
+	ReplaceAll[expr,
+		MapIndexed[
+			With[{canonical = Pattern @@ {
+					Symbol @ Extract[
+						chars,
+						#2
+					],
+					Last @ #1
+				}},
+				Verbatim[#1] :> canonical
+			] &,
+			patts
+		]
 	]
 ]
 
