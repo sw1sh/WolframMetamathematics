@@ -64,7 +64,7 @@ iMultiCoReplace[expr_, rule_ ? RuleQ, multiUnification_Association, head_Symbol]
 ]
 
 
-Options[MultiCoReplace] = Join[Options[MultiCoUnify]];
+Options[MultiCoReplace] := Join[Options[MultiCoUnify]];
 
 MultiCoReplace[expr_, rule_ ? RuleQ, head_Symbol : List, opts : OptionsPattern[]] :=
 	iMultiCoReplace[expr, rule, MultiCoUnify[expr, First[rule], FilterRules[{opts}, Options[MultiCoUnify]]], head]

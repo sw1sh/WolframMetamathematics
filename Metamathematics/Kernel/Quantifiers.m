@@ -47,7 +47,10 @@ rulifyFormula[expr_] := BooleanConvert[unquantifyFormula[expr /. ex_Exists \[Imp
     rulifyLiteral
 
 
-rulifyLiteral[expr : Except[_List]] := Replace[expr, formula : Except[_Rule | _TwoWayRule] :> {formula <-> True, Not[formula] <-> False, False -> formula}]
+rulifyLiteral[expr : Except[_List]] :=
+	Replace[expr, {
+		formula : _Rule | _TwoWayRule :> {formula},
+		formula : Except[_Rule | _TwoWayRule] :> {formula <-> True, Not[formula] <-> False, False -> formula}}]
 
 rulifyLiteral[expr_List] := Splice @* rulifyLiteral /@ expr
 

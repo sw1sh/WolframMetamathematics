@@ -9,14 +9,15 @@ PackageExport["paraSubstitutionLemmas"]
 
 
 
-Options[paraSubstitutionLemmas] = {
+Options[paraSubstitutionLemmas] := {
     Heads -> False,
     "Identity" -> False,
     "Uniquify" -> True,
     "Canonicalize" -> False
-};
+} ~Join~ Options[canonicalizePatterns];
 
-paraSubstitutionLemmas[expr_, rule_Rule, OptionsPattern[]] := Cond[TrueQ[OptionValue["Canonicalize"]], canonicalizePatterns] /@
+paraSubstitutionLemmas[expr_, rule_Rule, opts : OptionsPattern[]] := Cond[TrueQ[OptionValue["Canonicalize"]], 
+    canonicalizePatterns[#, FilterRules[{opts}, Options[canonicalizePatterns]]] &] /@
     Association @ KeyValueMap[{k, v} |-> MapIndexed[{k, First @ #2} -> #1 &, v]] @
         MultiParaReplace[expr,
             makeReplaceRule @@ Cond[TrueQ @ OptionValue["Uniquify"], Block[{$ModuleNumber = 1}, uniquifyPatterns[#]] &][rule],
@@ -46,19 +47,20 @@ paraSubstitutionLemmas[rule : _TwoWayRule | _ ? RuleQ | _List, opts : OptionsPat
 
 
 
-Options[coSubstitutionLemmas] = {
+Options[coSubstitutionLemmas] := {
     Heads -> False,
     "Identity" -> False,
     "Uniquify" -> True,
     "Canonicalize" -> False
-};
+} ~Join~ Options[canonicalizePatterns];
 
-coSubstitutionLemmas[expr_, rule_Rule, OptionsPattern[]] := Cond[TrueQ[OptionValue["Canonicalize"]], canonicalizePatterns] /@
+coSubstitutionLemmas[expr_, rule_Rule, opts : OptionsPattern[]] := Cond[TrueQ[OptionValue["Canonicalize"]],
+    canonicalizePatterns[#, FilterRules[{opts}, Options[canonicalizePatterns]]] &] /@
     Association @ KeyValueMap[{k, v} |-> MapIndexed[{k, First @ #2} -> #1 &, v]] @
         MultiCoReplace[expr,
             makeReplaceRule @@ Cond[TrueQ @ OptionValue["Uniquify"], Block[{$ModuleNumber = 1}, uniquifyPatterns[#]] &][rule],
             "InnerMatch" -> Except[_TwoWayRule] -> {},
-            "OuterMatch" -> HoldPattern[Except[((_Pattern | _Condition) -> {__}) | (_PatternTest -> {Except[1], ___})]],
+            "OuterMatch" -> Except[((_Pattern | _Condition) -> {__}) | (_PatternTest -> {Except[1], ___})],
             "OuterMode" -> All,
             Heads -> OptionValue[Heads]
         ]
@@ -82,14 +84,15 @@ coSubstitutionLemmas[expr_, rules_List, opts : OptionsPattern[]] :=
 coSubstitutionLemmas[rule : _TwoWayRule | _ ? RuleQ | _List, opts : OptionsPattern[]][expr_] := coSubstitutionLemmas[expr, rule, opts]
 
 
-Options[substitutionLemmas] = {
+Options[substitutionLemmas] := {
     Heads -> False,
     "Identity" -> False,
     "Uniquify" -> True,
     "Canonicalize" -> False
-};
+} ~Join~ Options[canonicalizePatterns];
 
-substitutionLemmas[expr_, rule_Rule, OptionsPattern[]] := Cond[TrueQ@OptionValue["Canonicalize"], canonicalizePatterns] /@
+substitutionLemmas[expr_, rule_Rule, opts : OptionsPattern[]] := Cond[TrueQ @ OptionValue["Canonicalize"],
+    canonicalizePatterns[#, FilterRules[{opts}, Options[canonicalizePatterns]]] &] /@
     Association @ KeyValueMap[{k, v} |-> MapIndexed[{k, First @ #2} -> #1 &, v]] @
         MultiReplace[expr,
             makeReplaceRule @@ Cond[TrueQ @ OptionValue["Uniquify"], Block[{$ModuleNumber = 1}, uniquifyPatterns[#]] &][rule],
@@ -110,7 +113,7 @@ substitutionLemmas[expr_, twr_TwoWayRule, opts : OptionsPattern[]] := Associatio
 
 substitutionLemmas[expr_, rules_List, opts : OptionsPattern[]] :=  Association@
     MapIndexed[{rule, pos} |->
-        KeyMap[Prepend[First@pos], substitutionLemmas[expr, rule, opts]],
+        KeyMap[Prepend[First @ pos], substitutionLemmas[expr, rule, opts]],
         rules
     ]
 

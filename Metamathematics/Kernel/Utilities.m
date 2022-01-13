@@ -46,7 +46,7 @@ mapAt[f_, expr_, pos_] := If[pos === {}, f @ expr, MapAt[f, expr, pos]]
 mapAt[f_, pos_][expr_] := mapAt[f, expr, pos]
 
 
-Options[replaceUnderHold] = Options[Position];
+Options[replaceUnderHold] := Options[Position];
 
 replaceAllUnderHold[expr_, rule_ ? RuleQ, opts : OptionsPattern[]] := replaceAllUnderHold[expr, {rule}, opts]
 
@@ -61,6 +61,8 @@ replaceAllUnderHold[rules_, opts : OptionsPattern[]][expr_]:= replaceAllUnderHol
 
 MapAtInplace[f_, expr_, pos_] := ReplacePart[expr, Extract[expr, pos, f], pos]
 
+MapAtInplace[f_, pos_][expr_] := MapAtInplace[f, expr, pos]
+
 
 uniquifyPatterns[expr_] := ReplaceAll[expr,
 	Union @ Cases[expr, x_Pattern, All, Heads -> True] /.
@@ -73,8 +75,16 @@ uniquifyPatterns[expr1_, expr2_] := ReplaceAll[expr1,
 ]
 
 
-canonicalizePatterns[expr_] := Module[{
-	chars = Join[CharacterRange["\[FormalA]", "\[FormalZ]"], CharacterRange["\[FormalCapitalA]", "\[FormalCapitalZ]"]],
+Options[canonicalizePatterns] := {"SymbolNames" -> Automatic}
+
+canonicalizePatterns[expr_, OptionsPattern[]] := Module[{
+	chars = Replace[
+		OptionValue["SymbolNames"],
+		{
+			Automatic -> Join[CharacterRange["\[FormalA]", "\[FormalZ]"], CharacterRange["\[FormalCapitalA]", "\[FormalCapitalZ]"]],
+			"Alphabet" | Alphabet -> Alphabet[]
+		}
+	],
 	patts = DeleteDuplicates @ Cases[expr, _Pattern, All, Heads -> True]
 },
 	chars = First @ NestWhile[Apply[{cs, n} |-> {Join[cs,  (# <> ToString[n]) & /@ cs], n + 1}], {chars, 1}, Length[#[[1]]] < Length[patts] &];
@@ -102,7 +112,7 @@ canonicalizePatterns[expr1_, expr2_] := ReplaceAll[expr1,
 ]
 
 
-formalizePatterns[expr_] := replaceAllUnderHold[expr, Verbatim[Pattern][name_Symbol, _] :> ResourceFunction["FormalizeSymbols"][name]]
+formalizePatterns[expr_] := replaceAllUnderHold[expr, Verbatim[Pattern][name_Symbol, obj_] :> Pattern @@ {ResourceFunction["FormalizeSymbols"][name], obj}]
 
 
 SetAttributes[makeReplaceRule, HoldRest]

@@ -4,7 +4,7 @@ PackageExport["SubexpressionPositions"]
 
 
 
-Options[SubexpressionPositions] = {
+Options[SubexpressionPositions] := {
     "OuterMatch" -> _ -> _,
     "InnerMatch" -> _ -> _,
     "OuterMode" -> "Any",

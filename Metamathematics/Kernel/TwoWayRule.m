@@ -9,12 +9,13 @@ PackageExport["TwoWayMultiReplaceGraphList"]
 
 
 
-Options[TwoWayMultiReplace] = Normal @ Merge[First] @ Join[{
+Options[TwoWayMultiReplace] := Normal @ Merge[First] @ Join[{
         "MaxDepth" -> Infinity,
         "MaxLeafCount" -> Infinity,
         "Deduplicate" -> False,
         "SubstitutionLemmas" -> True,
         "CoSubstitutionLemmas" -> False,
+        "ParaSubstitutionLemmas" -> False,
         (* rules:{_TwoWayRule..} |-> {{Subscript[i, 1], Subscript[j, 
         1]}, {Subscript[i, 2],Subscript[j, 2]}, ...} - 
         list of rule index pairs to combine with each other *)
@@ -22,7 +23,8 @@ Options[TwoWayMultiReplace] = Normal @ Merge[First] @ Join[{
         Heads -> False
     },
     Options[substitutionLemmas],
-    Options[coSubstitutionLemmas]
+    Options[coSubstitutionLemmas],
+    Options[paraSubstitutionLemmas]
 ];
 
 TwoWayMultiReplace[rules : {_TwoWayRule ..}, opts : OptionsPattern[]] := Module[{
@@ -35,7 +37,7 @@ TwoWayMultiReplace[rules : {_TwoWayRule ..}, opts : OptionsPattern[]] := Module[
     lemmas = If[
         TrueQ @ OptionValue @ "SubstitutionLemmas",
         Association @@ (
-            KeyMap[Prepend[{#1, #2}]] @
+            KeyMap[Prepend["Substitution"] @* Prepend[{#1, #2}]] @
             substitutionLemmas[rules[[#1]], rules[[#2]], FilterRules[{opts}, Options[substitutionLemmas]]] & @@@ ruleIndices
         ),
         <||>
@@ -46,8 +48,19 @@ TwoWayMultiReplace[rules : {_TwoWayRule ..}, opts : OptionsPattern[]] := Module[
     If[ TrueQ @ OptionValue @ "CoSubstitutionLemmas",
         lemmas = Association[lemmas,
             Association @@ (
-                KeyMap[Append["Co"]@*Prepend[{#1, #2}]]@
+                KeyMap[Prepend["CoSubstitution"] @* Prepend[{#1, #2}]]@
                 coSubstitutionLemmas[rules[[#1]], rules[[#2]], FilterRules[{opts}, Options[coSubstitutionLemmas]]] & @@@ ruleIndices
+            )
+        ]
+    ];
+
+    (* add parasubstitution lemmas *)
+
+    If[ TrueQ @ OptionValue @ "ParaSubstitutionLemmas",
+        lemmas = Association[lemmas,
+            Association @@ (
+                KeyMap[Prepend["ParaSubstitution"] @* Prepend[{#1, #2}]]@
+                paraSubstitutionLemmas[rules[[#1]], rules[[#2]], FilterRules[{opts}, Options[paraSubstitutionLemmas]]] & @@@ ruleIndices
             )
         ]
     ];
@@ -72,7 +85,7 @@ TwoWayMultiReplace[rules : {_TwoWayRule ..}, opts : OptionsPattern[]] := Module[
 ]
 
 
-Options[TwoWayMultiReplaceList] = Join[{"Sample" -> Infinity}, Options[TwoWayMultiReplace]];
+Options[TwoWayMultiReplaceList] := Join[{"Sample" -> Infinity}, Options[TwoWayMultiReplace]];
 
 TwoWayMultiReplaceList[rules : {_TwoWayRule ...}, n_Integer : 1, opts : OptionsPattern[]] :=
 Rest @ NestList[
@@ -88,7 +101,7 @@ Rest @ NestList[
 ]
 
 
-Options[TwoWayMultiReplaceGraphList] = Join[Options[TwoWayMultiReplaceList], Options[Graph]];
+Options[TwoWayMultiReplaceGraphList] := Join[Options[TwoWayMultiReplaceList], Options[Graph]];
 
 TwoWayMultiReplaceGraphList[rules : {_TwoWayRule ...}, n_Integer : 1, opts : OptionsPattern[]] :=
     Prepend[

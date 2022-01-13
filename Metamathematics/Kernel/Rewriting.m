@@ -8,7 +8,7 @@ PackageExport["disagreementSet"]
 
 
 
-Options[unify] = {Heads -> True};
+Options[unify] := {Heads -> True};
 
 unify[x_, y_, patt : Except[OptionsPattern[]] : _Pattern, opts : OptionsPattern[]] := Enclose[
 Module[{
