@@ -3,31 +3,29 @@ Package["Wolfram`Metamathematics`"]
 PackageImport["GeneralUtilities`"]
 
 
-PackageExport["TwoWayMultiReplace"]
-PackageExport["TwoWayMultiReplaceList"]
-PackageExport["TwoWayMultiReplaceGraphList"]
+PackageExport["TwoWayRuleMultiReplace"]
+PackageExport["TwoWayRuleMultiReplaceList"]
+PackageExport["TwoWayRuleMultiReplaceGraphList"]
 
 
 
-Options[TwoWayMultiReplace] := Normal @ Merge[First] @ Join[{
+Options[TwoWayRuleMultiReplace] := Normal @ Merge[First] @ Join[{
         "MaxDepth" -> Infinity,
         "MaxLeafCount" -> Infinity,
         "Deduplicate" -> False,
-        "SubstitutionLemmas" -> True,
-        "CoSubstitutionLemmas" -> False,
-        "ParaSubstitutionLemmas" -> False,
+        "Substitution" -> True,
+        "Cosubstitution" -> False,
+        "Bisubstitution" -> False,
         (* rules:{_TwoWayRule..} |-> {{Subscript[i, 1], Subscript[j, 
         1]}, {Subscript[i, 2],Subscript[j, 2]}, ...} - 
         list of rule index pairs to combine with each other *)
         "RuleSelectionFunction" -> Automatic,
         Heads -> False
     },
-    Options[substitutionLemmas],
-    Options[coSubstitutionLemmas],
-    Options[paraSubstitutionLemmas]
+    DeleteCases[Options[TwoWayMultiReplace], Method -> _]
 ];
 
-TwoWayMultiReplace[rules : {_TwoWayRule ..}, opts : OptionsPattern[]] := Module[{
+TwoWayRuleMultiReplace[rules : {_TwoWayRule ..}, opts : OptionsPattern[]] := Module[{
     ruleIndices = (OptionValue["RuleSelectionFunction"] /. Automatic -> (Tuples[Range @ Length @ #, {2}] &))[rules],
     lemmas
 },
@@ -35,32 +33,32 @@ TwoWayMultiReplace[rules : {_TwoWayRule ..}, opts : OptionsPattern[]] := Module[
     (* add substitution lemmas *)
 
     lemmas = If[
-        TrueQ @ OptionValue @ "SubstitutionLemmas",
+        TrueQ @ OptionValue @ "Substitution",
         Association @@ (
             KeyMap[Prepend["Substitution"] @* Prepend[{#1, #2}]] @
-            substitutionLemmas[rules[[#1]], rules[[#2]], FilterRules[{opts}, Options[substitutionLemmas]]] & @@@ ruleIndices
+            TwoWayMultiReplace[rules[[#1]], rules[[#2]],  Method -> "Substitution", FilterRules[{opts}, Options[TwoWayMultiReplace]]] & @@@ ruleIndices
         ),
         <||>
     ];
 
     (* add cosubstitution lemmas *)
 
-    If[ TrueQ @ OptionValue @ "CoSubstitutionLemmas",
+    If[ TrueQ @ OptionValue @ "Cosubstitution",
         lemmas = Association[lemmas,
             Association @@ (
-                KeyMap[Prepend["CoSubstitution"] @* Prepend[{#1, #2}]]@
-                coSubstitutionLemmas[rules[[#1]], rules[[#2]], FilterRules[{opts}, Options[coSubstitutionLemmas]]] & @@@ ruleIndices
+                KeyMap[Prepend["Cosubstitution"] @* Prepend[{#1, #2}]]@
+                TwoWayMultiReplace[rules[[#1]], rules[[#2]],  Method -> "Cosubstitution", FilterRules[{opts}, Options[TwoWayMultiReplace]]] & @@@ ruleIndices
             )
         ]
     ];
 
-    (* add parasubstitution lemmas *)
+    (* add bisubstitution lemmas *)
 
-    If[ TrueQ @ OptionValue @ "ParaSubstitutionLemmas",
+    If[ TrueQ @ OptionValue @ "Bisubstitution",
         lemmas = Association[lemmas,
             Association @@ (
-                KeyMap[Prepend["ParaSubstitution"] @* Prepend[{#1, #2}]]@
-                paraSubstitutionLemmas[rules[[#1]], rules[[#2]], FilterRules[{opts}, Options[paraSubstitutionLemmas]]] & @@@ ruleIndices
+                KeyMap[Prepend["Bisubstitution"] @* Prepend[{#1, #2}]]@
+                TwoWayMultiReplace[rules[[#1]], rules[[#2]], Method -> "Bisubstitution", FilterRules[{opts}, Options[TwoWayMultiReplace]]] & @@@ ruleIndices
             )
         ]
     ];
@@ -72,7 +70,7 @@ TwoWayMultiReplace[rules : {_TwoWayRule ..}, opts : OptionsPattern[]] := Module[
     lemmas = Association @ If[TrueQ[OptionValue["Deduplicate"]],
         With[{counts = Counts[DeleteCases[lemmas, Alternatives @@ Verbatim /@ rules]]},
             KeyValueMap[Append[#1, Lookup[counts, #2, 0]] -> #2 &]@
-            DeleteDuplicatesBy[lemmas, canonicalizePatterns @* Sort](*
+            DeleteDuplicatesBy[lemmas, CanonicalizePatterns @* Sort](*
             DeleteDuplicates[
                 lemmas,
                 MatchQ[#1,#2]&&MatchQ[#2,#1]||#1===Reverse[#2]&
@@ -85,25 +83,25 @@ TwoWayMultiReplace[rules : {_TwoWayRule ..}, opts : OptionsPattern[]] := Module[
 ]
 
 
-Options[TwoWayMultiReplaceList] := Join[{"Sample" -> Infinity}, Options[TwoWayMultiReplace]];
+Options[TwoWayRuleMultiReplaceList] := Join[{"Sample" -> Infinity}, Options[TwoWayRuleMultiReplace]];
 
-TwoWayMultiReplaceList[rules : {_TwoWayRule ...}, n_Integer : 1, opts : OptionsPattern[]] :=
+TwoWayRuleMultiReplaceList[rules : {_TwoWayRule ...}, n_Integer : 1, opts : OptionsPattern[]] :=
 Rest @ NestList[
     Module[{
         newRules = Take[Values @ KeySortBy[#, Minus @* Last], UpTo[OptionValue["Sample"]]],
         result
     },
-        result = TwoWayMultiReplace[newRules, FilterRules[{opts}, Options[TwoWayMultiReplace]]];
-        Association[#, KeyMap[MapAt[DeleteDuplicates @ newRules[[#]] &, 1]] @ result]
+        result = TwoWayRuleMultiReplace[newRules, FilterRules[{opts}, Options[TwoWayRuleMultiReplace]]];
+        Association[#, KeyMap[MapAt[DeleteDuplicates @ newRules[[#]] &, 2]] @ result]
     ] &,
-    Association@MapIndexed[{{}, #2, 0} -> #1 &, rules],
+    Association @ MapIndexed[{"Init", {}, #2, 0} -> #1 &, rules],
     n
 ]
 
 
-Options[TwoWayMultiReplaceGraphList] := Join[Options[TwoWayMultiReplaceList], Options[Graph]];
+Options[TwoWayRuleMultiReplaceGraphList] := Join[Options[TwoWayRuleMultiReplaceList], Options[Graph]];
 
-TwoWayMultiReplaceGraphList[rules : {_TwoWayRule ...}, n_Integer : 1, opts : OptionsPattern[]] :=
+TwoWayMultiRuleReplaceGraphList[rules : {_TwoWayRule ...}, n_Integer : 1, opts : OptionsPattern[]] :=
     Prepend[
         Graph[#,
             VertexLabels -> Placed["Name", Tooltip],
@@ -113,8 +111,8 @@ TwoWayMultiReplaceGraphList[rules : {_TwoWayRule ...}, n_Integer : 1, opts : Opt
         Catenate @* KeyValueMap[{info, v} |->
             MapIndexed[
                 DirectedEdge[#1, v, Row[{First@#2, ":", Rest @ info}]] &,
-                First @ info
-            ]] /@ TwoWayMultiReplaceList[rules, n, FilterRules[{opts}, Options[TwoWayMultiReplaceList]]],
+                info[[2]]
+            ]] /@ TwoWayRuleMultiReplaceList[rules, n, FilterRules[{opts}, Options[TwoWayRuleMultiReplaceList]]],
 
         Graph[rules, {}, VertexLabels -> Placed["Name", Tooltip], FilterRules[{opts}, Options[Graph]]]
     ]

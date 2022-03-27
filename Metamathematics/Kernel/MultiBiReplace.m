@@ -3,17 +3,18 @@ Package["Wolfram`Metamathematics`"]
 PackageImport["GeneralUtilities`"]
 
 
-PackageExport["MultiCoUnify"]
-PackageExport["MultiCoReplace"]
+PackageExport["MultiBiUnify"]
+PackageExport["MultiBiReplace"]
+
 PackageExport["unifyAt"]
-PackageExport["CoMatchAt"]
-PackageExport["CoReplaceAt"]
+PackageExport["matchAt"]
+PackageExport["replaceAt"]
 
 
 
-Options[iMultiCoUnify] := Options[unify] ~Join~ {"Mode" -> "Tuples"};
+Options[iMultiBiUnify] := Options[unifier] ~Join~ {"Mode" -> "Tuples"};
 
-iMultiCoUnify[posSubExpr_, subset_, head_Symbol, opts : OptionsPattern[]] := Module[{
+iMultiBiUnify[posSubExpr_, subset_, head_Symbol, opts : OptionsPattern[]] := Module[{
     positions, values,
     subsets = wrap[subset, head]
 },
@@ -21,7 +22,7 @@ iMultiCoUnify[posSubExpr_, subset_, head_Symbol, opts : OptionsPattern[]] := Mod
     values = Values[posSubExpr];
     DeleteCases[_ ? FailureQ] @ Association @ Map[pos |->
         Extract[positions, pos] ->
-            With[{term = Extract[values, pos]}, unify[head @@ term, subsets, opts](* & /@ orderByPattern[term, head] @ subsets*)],
+            With[{term = Extract[values, pos]}, unifier[head @@ term, subsets]],
         Switch[
             OptionValue["Mode"],
             "Tuples",
@@ -38,9 +39,9 @@ iMultiCoUnify[posSubExpr_, subset_, head_Symbol, opts : OptionsPattern[]] := Mod
 ]
 
 
-Options[MultiCoUnify] := Join[Options[SubexpressionPositions], Options[iMultiCoUnify]];
+Options[MultiBiUnify] := Join[Options[SubexpressionPositions], Options[iMultiBiUnify]];
 
-MultiCoUnify[expr_, subset_, level : Except[OptionsPattern[]] : All, head_Symbol : List, opts : OptionsPattern[]] := With[{
+MultiBiUnify[expr_, subset_, level : Except[OptionsPattern[]] : All, head_Symbol : List, opts : OptionsPattern[]] := With[{
     posSubExpr = SubexpressionPositions[expr, level,
         FilterRules[{
             opts,
@@ -49,14 +50,15 @@ MultiCoUnify[expr_, subset_, level : Except[OptionsPattern[]] : All, head_Symbol
         }, Options[SubexpressionPositions]]
     ]},
 
-    iMultiCoUnify[posSubExpr, subset, head, FilterRules[{opts}, Options[iMultiCoUnify]]]
+    iMultiBiUnify[posSubExpr, subset, head, FilterRules[{opts}, Options[iMultiBiUnify]]]
 ]
 
 
-iMultiCoReplace[expr_, rule_ ? RuleQ, multiUnification_Association, head_Symbol, returnTokens_ : False] :=
+iMultiBiReplace[expr_, rule_ ? RuleQ, multiUnification_Association, head_Symbol, returnTokens_ : False] :=
     DeleteCases[{}] @ Association @ KeyValueMap[{pos, unifications} |-> pos -> DeleteDuplicates @ Catenate @ Map[unification |->
         With[{
-            newExpr = expr /. unification
+            newExpr = expr /. unification,
+            newRule = makeReplaceRule @@ (makePatternRule @@ rule /. unification)
         },
             Map[
                 With[{ppos = Replace[{} -> {{}}] /@ pos, res = wrap[#, head]},
@@ -76,23 +78,26 @@ iMultiCoReplace[expr_, rule_ ? RuleQ, multiUnification_Association, head_Symbol,
                 ]
                 ] &,
                 ReplaceList[
-                    wrap[First[rule], head],
-                    ReplacePart[rule, 1 -> head @@ Extract[newExpr, pos]]
+                    wrap[First[newRule], head],
+                    ReplacePart[newRule, 1 -> head @@ Extract[newExpr, pos]]
                 ]
             ]
         ],
-        unifications
+        wrap[unifications]
     ],
     multiUnification
 ]
 
 
-Options[MultiCoReplace] := Join[Options[MultiCoUnify], {"ReturnTokens" -> False}];
+Options[MultiBiReplace] := Join[Options[MultiBiUnify], {"ReturnTokens" -> False}];
 
-MultiCoReplace[expr_, rule_ ? RuleQ,  level : Except[OptionsPattern[]] : All, head_Symbol : List, opts : OptionsPattern[]] :=
-    iMultiCoReplace[expr, rule, MultiCoUnify[expr, First[rule], level, FilterRules[{opts}, Options[MultiCoUnify]]], head, TrueQ @ OptionValue[MultiBiReplace, {opts}, "ReturnTokens"]]
+MultiBiReplace[expr_, rule_ ? RuleQ, level : Except[OptionsPattern[]] : All, head_Symbol : List, opts : OptionsPattern[]] := With[{
+    newRule = makeReplaceRule @@ Block[{$ModuleNumber = 1}, uniquifyPatterns[makePatternRule @@ rule]]
+},
+    iMultiBiReplace[expr, newRule, MultiBiUnify[expr, First[newRule], level, FilterRules[{opts}, Options[MultiBiUnify]]], head, TrueQ @ OptionValue[MultiBiReplace, {opts}, "ReturnTokens"]]
+]
 
-MultiCoReplace[expr_, rules : {_ ? RuleQ ...}, level : Except[OptionsPattern[]] : All, head_Symbol : List, opts : OptionsPattern[]] := With[{
+MultiBiReplace[expr_, rules : {_ ? RuleQ ...}, level : Except[OptionsPattern[]] : All, head_Symbol : List, opts : OptionsPattern[]] := With[{
     posSubExpr = SubexpressionPositions[expr, level,
         FilterRules[{
             opts,
@@ -103,24 +108,26 @@ MultiCoReplace[expr_, rules : {_ ? RuleQ ...}, level : Except[OptionsPattern[]] 
     Association @ MapIndexed[
         KeyMap[
             List /* Prepend[First @ #2],
-            iMultiCoReplace[expr, #1, iMultiCoUnify[posSubExpr, First[#1], head, FilterRules[{opts}, Options[iMultiCoUnify]]], head, TrueQ @ OptionValue[MultiBiReplace, {opts}, "ReturnTokens"]]
+            With[{rule =  Block[{$ModuleNumber = 1}, uniquifyPatterns[#1]]},
+                iMultiBiReplace[expr, rule, iMultiBiUnify[posSubExpr, First[rule], head, FilterRules[{opts}, Options[iMultiBiUnify]]], head, TrueQ @ OptionValue[MultiBiReplace, {opts}, "ReturnTokens"]]
+            ]
         ] &,
         rules
     ]
 ]
 
 
-CoUnifyAt[expr_, patt_, pos_] := Enclose @ First @ Confirm @ unify[extract[expr, pos], patt]
+unifyAt[expr_, patt_, pos_] := unifier[extract[expr, pos], patt]
 
 
-CoMatchAt[expr_, patt_, pos_] := Enclose @ With[{newPatt = Block[{$ModuleNumber = 1}, uniquifyPatterns[patt, expr]]},
-    expr /. Confirm @ CoUnifyAt[expr, newPatt, pos]
+matchAt[expr_, patt_, pos_] := Enclose @ With[{newPatt = Block[{$ModuleNumber = 1}, uniquifyPatterns[patt, expr]]},
+    expr /. Confirm @ unifyAt[expr, newPatt, pos]
 ]
 
 
-CoReplaceAt[expr_, rule_ ? RuleQ, pos_] := Enclose @ With[{newRule = Block[{$ModuleNumber = 1}, uniquifyPatterns[makePatternRule @@ rule, expr]]},
+replaceAt[expr_, rule_ ? RuleQ, pos_] := Enclose @ With[{newRule = Block[{$ModuleNumber = 1}, uniquifyPatterns[makePatternRule @@ rule, expr]]},
     With[{
-        substitution = First @ Confirm @ unify[extract[expr, pos], First[newRule]]
+        substitution = Confirm @ unifier[extract[expr, pos], First[newRule]]
     },
         mapAt[Replace[makeReplaceRule @@ newRule], expr /. substitution, pos]
     ]
