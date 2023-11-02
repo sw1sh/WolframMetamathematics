@@ -10,9 +10,9 @@ PackageExport["rulifyLiteral"]
 
 universalPatterns[expr_ /; ! FreeQ[expr, _ForAll], bound_ : {}] := expr //.
     HoldPattern[ForAll[var_, cond___, ForAll[var2_, cond2___, subExpr_]]] :> ForAll[Join[wrap[var], wrap[var2]], cond && cond2, subExpr] //.
-    HoldPattern[ForAll[var_, cond___, subExpr_]] :> With[{vars = Replace[var, v : Except[_List] :> {v}]},
+    HoldPattern[ForAll[var_, cond___, subExpr_]] :> With[{vars = wrap[var]},
     With[{repl = Block[{$ModuleNumber = 1}, Thread[vars -> Unique /@ vars]]},
-        With[{patternRepl = MapAt[Pattern[#, Blank[]] &, repl, {All, 2}]},
+        With[{patternRepl = MapAt[Pattern[#, _] &, repl, {All, 2}]},
             With[{res = skolemPatterns[subExpr, Join[vars, bound]] /. patternRepl},
                 If[ Length[{cond}] > 0,
                     With[{newCond = cond /. repl}, res /; newCond],
@@ -25,14 +25,15 @@ universalPatterns[expr_ /; ! FreeQ[expr, _ForAll], bound_ : {}] := expr //.
 universalPatterns[expr_, ___] := expr
 
 
-skolemPatterns[expr_ /; ! FreeQ[expr, _Exists], bound_ : {}] := expr //. HoldPattern[Exists[var_, cond___, subExpr_]] :> With[{vars = Replace[var, v : Except[_List] :> {v}]},
-    With[{repl = Block[{$ModuleNumber = 1}, Thread[vars -> (If[Length[bound] > 0, Unique[#] @@ bound, Unique[#]] & /@ vars)]]},
-        If[ Length[{cond}] > 0,
-            universalPatterns[subExpr, bound] && cond /. repl,
-            universalPatterns[subExpr, bound] /. repl
+skolemPatterns[expr_ /; ! FreeQ[expr, _Exists], bound_ : {}] := expr //.
+    HoldPattern[Exists[var_, cond___, subExpr_]] :> With[{vars = wrap[var]},
+        With[{repl = Block[{$ModuleNumber = 1}, Thread[vars -> (If[Length[bound] > 0, Unique[#] @@ bound, Unique[#]] & /@ vars)]]},
+            If[ Length[{cond}] > 0,
+                universalPatterns[subExpr, bound] && cond /. repl,
+                universalPatterns[subExpr, bound] /. repl
+            ]
         ]
     ]
-]
 skolemPatterns[expr_, ___] := expr
 
 

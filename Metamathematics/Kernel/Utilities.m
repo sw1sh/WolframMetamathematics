@@ -66,7 +66,9 @@ replaceAllUnderHold[expr_, rule_ ? RuleQ, opts : OptionsPattern[]] := replaceAll
 replaceAllUnderHold[expr_, rules : {_ ? RuleQ...}, opts : OptionsPattern[]] := With[{
     pos = Position[Unevaluated[expr], Alternatives @@ rules[[All, 1]], opts]
 },
-    replacePart[Unevaluated[expr], Thread[pos -> Replace[rules] /@ Extract[Unevaluated[expr], pos]]]
+    With[{rhs = Unevaluated @@@ Replace[Extract[Unevaluated[expr], pos, Hold], MapAt[RuleCondition, rules, {All, 2}], {2}]},
+        replacePart[Unevaluated[expr], Thread[pos :> rhs]]
+    ]
 ]
 
 replaceAllUnderHold[rules_, opts : OptionsPattern[]][expr_]:= replaceAllUnderHold[expr, rules, opts]
@@ -195,19 +197,20 @@ FirstAt[expr_, pos : {{_Integer...}...}] := Fold[FirstAt, Unevaluated @ expr, po
 FirstAt[pos_][expr_] := FirstAt[Unevaluated @ expr, pos]
 
 
+BeheadAt[expr_, p_Integer] := BeheadAt[Unevaluated @ expr, {p}]
 BeheadAt[expr_, {}] := Sequence @@ expr
 BeheadAt[expr_, pos : {___, 0}] := ReplacePart[expr, Append[pos, 0] -> Sequence]
 BeheadAt[expr_, pos : {_Integer..}] := With[{
-	head = Unevaluated @@ Extract[expr, Append[Most @ pos, 0], Hold]
+	head = Unevaluated @@ Extract[Unevaluated @ expr, Append[Most @ pos, 0], Hold]
 },
 	With[{
-		r = ReplacePart[extract[expr, Most @ pos, HoldApply[Hold]], {Last[pos], 0} -> Sequence]
+		r = ReplacePart[extract[Unevaluated @ expr, Most @ pos, HoldApply[Hold]], {Last[pos], 0} -> Sequence]
 	},
 		With[{beheaded = Unevaluated @@ ReplacePart[Hold @ expr, Prepend[Most @ pos, 1] :> r]},
 			ReplacePart[beheaded, Append[Most @ pos, 0] :> head]
 		]
 	]
 ]
-BeheadAt[expr_, pos : {{_Integer...}...}] := Fold[BeheadAt, Unevaluated @ expr, pos]
-BeheadAt[pos_][expr_] := BeheadAt[expr, pos]
+BeheadAt[expr_, pos : {{_Integer...}...}] := Fold[Function[Null, BeheadAt[Unevaluated[#1], #2], HoldFirst], Unevaluated @ expr, pos]
+BeheadAt[pos_][expr_] := BeheadAt[Unevaluated @ expr, pos]
 
